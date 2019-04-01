@@ -1,0 +1,105 @@
+---
+title: "Capesize - Time Series Analysis"
+author: "Sachin Manjhi"
+date: "September 6, 2018"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(forecast)
+```
+
+## Read C8_14 route freight the data from csv file
+
+```{r input}
+# C8 historical data
+c8_raw_data <- read.csv(file="c8_rates.csv", stringsAsFactors = FALSE)
+head(c8_raw_data)
+```
+
+## Convert raw data to Timeseries
+```{r convert}
+c8_ts_data <- ts(c8_raw_data$c8_14, frequency=12, start=c(2011,1))
+c8_ts_data
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Plot values as time series
+```{r plot ts}
+plot.ts(c8_ts_data, axes=TRUE, ylab="Freight Rate", main="Freight Rate : C8_14 route")
+
+# Plot the mean value
+mean_y <- mean(c8_ts_data)
+abline(h=mean_y, lt=21, col='blue')
+
+# plot the regression line
+linearFit <- tslm(c8_ts_data ~ trend + season)
+abline(linearFit, lt=22, col='green')
+
+```
+
+
+## Decompose the time series into components
+```{r decompose}
+c8_ts_components <- decompose(c8_ts_data)
+plot(c8_ts_components)
+```
+
+
+## Lets look closely at the random variation
+```{r randomVariation}
+c8_ts_random <- c8_ts_data - c8_ts_components$seasonal - c8_ts_components$trend
+plot(c8_ts_random, main="Random variation")
+
+trend <- c8_ts_components$trend
+seasonaity <- c8_ts_components$seasonal
+random <- c8_ts_data - c8_ts_components$seasonal - c8_ts_components$trend
+
+ds <- data.frame(c8_ts_data, trend, seasonaity, random)
+
+write.csv2(file = "tscomponents.csv", ds)
+
+```
+
+## Lets try to fit a HoltWinter Model
+```{r holtWinter}
+
+c8_18_Forecast_1 <- HoltWinters(c8_ts_data, beta = 0, gamma = 0)  #simple exponential smoothing
+plot(c8_18_Forecast_1)
+
+c8_18_Forecast_2 <- HoltWinters(c8_ts_data)                       #triple exponential smoothing
+plot(c8_18_Forecast_2)
+```
+
+## Lets investigate how well an ARIMA model will do
+```{r ACF plot}
+acf(c8_ts_data, lag.max=10)  
+pacf(c8_ts_data, lag.max=10)
+```
+# ACF  - We see that the autocorrelations for lags 1, 2, 3 are positive and tail off after lag 3.
+# PACF - we see that the partial autocorrelation (pac) at lag 1 is positive and exceeds the significance bounds, while  the partial autocorrelation 
+#        at lag 3 is negative and also exceeds the significance bounds.
+
+# Hence Following ARMA models are possible:
+# ARMA(0,3), ARMA(3,0), ARMA(3,3), ARMA(3,2) etc.
+
+
+```{r arima}
+c8_arima_model <- auto.arima(c8_ts_data)
+c8_arima_model
+```
+
+
+```{r predict}
+fcast <- forecast(c8_arima_model, h=30)
+plot(fcast)
+
+```
+
+
